@@ -1,0 +1,22 @@
+{
+  "expo": {
+    "name": "CostView",
+    "slug": "costview",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#f4f1ea"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "android": {
+      "package": "com.costview.app"
+    },
+    "ios": {
+      "bundleIdentifier": "com.costview.app"
+    }
+  }
+}
