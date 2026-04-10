@@ -34,7 +34,7 @@ export async function fetchIndicatorDaily() {
     .from('indicator_daily_logs')
     .select('ai_gpr_index, oil_disruptions, gpr_original, non_oil_gpr, reference_date')
     .order('reference_date', { ascending: false })
-    .limit(365);
+    .limit(1250); // DB 전체 테이터(현재 1186개) 조회를 위해 1250으로 설정
   if (error) throw error;
   return (data ?? []).reverse();
 }

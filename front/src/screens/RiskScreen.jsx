@@ -1,15 +1,20 @@
 // screens/RiskScreen.jsx — SCR-004 리스크 지수
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import {
   ActivityIndicator,
+  Animated,
   Dimensions,
+  Easing,
   Platform,
   Pressable,
   ScrollView,
   StatusBar,
   StyleSheet,
   Text,
+  TextInput,
   View,
+  Modal,
+  TouchableOpacity
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LineChart } from 'react-native-chart-kit';
@@ -17,11 +22,11 @@ import { COLORS } from '../constants/colors';
 import { calcStats, formatIndex, formatNumber } from '../lib/helpers';
 import { fetchIndicatorDaily, fetchIndicatorMonthly } from '../lib/supabase';
 
-const { width: SCREEN_W } = Dimensions.get('window');
-const CHART_WIDTH = SCREEN_W - 28;
+const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
+const CHART_MIN_WIDTH = SCREEN_W - 28;
 
 const CHART_SERIES = [
-  { key: 'ai_gpr_index',    label: 'AI GPR',       color: '#D85A30' },
+  { key: 'ai_gpr_index',    label: 'AI 지정학적 위험 지수',       color: '#D85A30' },
   { key: 'oil_disruptions', label: '석유 차질(÷10)', color: '#EF9F27' },
   { key: 'gpr_original',    label: '기존 GPR',      color: '#888780' },
   { key: 'non_oil_gpr',     label: '비석유',         color: '#2E86AB' },
@@ -74,10 +79,38 @@ function StatCell({ label, value, sub, subColor }) {
 export default function RiskScreen() {
   const insets = useSafeAreaInsets();
   const [tab, setTab]   = useState('daily');   // 'daily' | 'monthly'
-  const [range, setRange] = useState('10');    // '10' | '20' | 'all'
+  const [range, setRange] = useState('20');    // 앱 크래시 방지를 위해 기본값을 'all'에서 '20'으로 변경
   const [daily, setDaily]     = useState(MOCK_DAILY);
   const [monthly, setMonthly] = useState([]);
   const [loading, setLoading] = useState(false);
+
+  // 모달 및 필터 State
+  const [showFilterModal, setShowFilterModal] = useState(false);
+  const [showFullscreen, setShowFullscreen] = useState(false);
+  const [startDate, setStartDate] = useState('2026-03-01');
+  const [endDate, setEndDate] = useState('2026-03-31');
+  const [visibleSeries, setVisibleSeries] = useState({
+    ai_gpr_index: true,
+    oil_disruptions: true,
+    gpr_original: true,
+    non_oil_gpr: true,
+  });
+
+  // 애니메이션 State (마스킹 기법)
+  const animMaskX = useRef(new Animated.Value(0)).current;
+  const fsAnimMaskX = useRef(new Animated.Value(0)).current;
+
+  // 날짜 자동 하이픈 포맷팅 함수
+  const handleDateInput = (text, setter) => {
+    const digits = text.replace(/\D/g, '');
+    let formatted = digits;
+    if (digits.length >= 5 && digits.length <= 6) {
+      formatted = `${digits.slice(0, 4)}-${digits.slice(4)}`;
+    } else if (digits.length >= 7) {
+      formatted = `${digits.slice(0, 4)}-${digits.slice(4, 6)}-${digits.slice(6, 8)}`;
+    }
+    setter(formatted);
+  };
 
   useEffect(() => {
     (async () => {
@@ -99,21 +132,60 @@ export default function RiskScreen() {
     : monthly.length > 0 ? monthly : daily;
 
   const slicedData = useMemo(() => {
-    if (range === 'all') return rawData;
-    const n = range === '10' ? 10 : 20;
-    return rawData.slice(-n);
-  }, [rawData, range]);
+    let result = rawData;
+    if (range === 'all') {
+      result = rawData;
+    } else if (range === 'custom' && startDate && endDate) {
+      result = rawData.filter(d => d.reference_date >= startDate && d.reference_date <= endDate);
+    } else {
+      const n = range === '10' ? 10 : 20;
+      result = rawData.slice(-n);
+    }
+
+    // [메모리 크래시 방지] SVG 렌더링 한계(8192px) 및 메모리 초과를 막기 위해 데이터가 너무 많으면 균등하게 압축(Sampling)
+    if (result.length > 150) {
+      const step = Math.ceil(result.length / 150);
+      result = result.filter((_, i) => i % step === 0);
+    }
+    return result;
+  }, [rawData, range, startDate, endDate]);
 
   const aiStats  = useMemo(() => calcStats(slicedData, 'ai_gpr_index'),    [slicedData]);
   const oilStats = useMemo(() => calcStats(slicedData, 'oil_disruptions'), [slicedData]);
 
-  // 차트 레이블: 최대 6개만 표시
+  // 그래프 가로 확대/스크롤 (보이는 데이터 포인트당 35px 지정)
+  const chartWidth = Math.max(CHART_MIN_WIDTH, slicedData.length * 35);
+  const fsChartWidth = Math.max(chartWidth, SCREEN_W * 1.5);
+
+  // 차트 렌더링 애니메이션 트리거 (데이터나 범례가 바뀔 때마다)
+  useEffect(() => {
+    animMaskX.setValue(0);
+    Animated.timing(animMaskX, {
+      toValue: chartWidth, // 마스크를 우측으로 끝까지 밀어냄
+      duration: 1200,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true, // 60FPS 네이티브 구동 보장
+    }).start();
+
+    fsAnimMaskX.setValue(0);
+    Animated.timing(fsAnimMaskX, {
+      toValue: fsChartWidth, // 크게보기용 더 넓은 너비
+      duration: 1200,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [slicedData, visibleSeries, chartWidth, fsChartWidth, showFullscreen]);
+
+  // 차트 레이블: 부분 노출 및 YY-MM-DD
   const chartLabels = useMemo(() =>
     slicedData.map((d, i) => {
-      const step = Math.ceil(slicedData.length / 6);
-      return i % step === 0 ? (d.reference_date?.slice(5) ?? '') : '';
+      const step = Math.ceil(slicedData.length / (chartWidth / 55));
+      if (i % step === 0) {
+        return d.reference_date?.slice(2) ?? '';
+      }
+      return '';
     }),
-    [slicedData],
+    [slicedData, chartWidth],
   );
 
   const aiSeries     = slicedData.map(d => Number(d.ai_gpr_index)    || 0);
@@ -121,9 +193,57 @@ export default function RiskScreen() {
   const gprSeries    = slicedData.map(d => Number(d.gpr_original)    || 0);
   const nonOilSeries = slicedData.map(d => Number(d.non_oil_gpr)     || 0);
 
+  const activeDatasets = [
+    visibleSeries.ai_gpr_index ? { data: aiSeries, color: () => '#D85A30', strokeWidth: 2 } : null,
+    visibleSeries.oil_disruptions ? { data: oilSeries, color: () => '#EF9F27', strokeWidth: 1.5 } : null,
+    visibleSeries.gpr_original ? { data: gprSeries, color: () => '#888780', strokeWidth: 1 } : null,
+    visibleSeries.non_oil_gpr ? { data: nonOilSeries, color: () => '#2E86AB', strokeWidth: 1.5 } : null,
+  ].filter(Boolean);
+
+  if (activeDatasets.length === 0) activeDatasets.push({ data: [0], color: () => 'transparent' });
+
   const dateRange = slicedData.length >= 2
     ? `${slicedData[0].reference_date} ~ ${slicedData[slicedData.length - 1].reference_date}`
     : '';
+
+  // 공통 라인 차트 컴포넌트
+  const renderLineChart = (width, height, isFullscreen = false) => (
+    <View style={{ width, height, position: 'relative' }}>
+      <LineChart
+        data={{
+          labels: chartLabels,
+          datasets: activeDatasets,
+        }}
+        width={width}
+        height={height}
+        withInnerLines
+        withOuterLines={false}
+        withShadow={false}
+        fromZero
+        chartConfig={{
+          backgroundColor: COLORS.white,
+          backgroundGradientFrom: COLORS.white,
+          backgroundGradientTo:   COLORS.white,
+          decimalPlaces: 0,
+          color:      (opacity = 1) => `rgba(30,58,95,${opacity})`,
+          labelColor: (opacity = 1) => `rgba(107,114,128,${opacity})`,
+          propsForDots: { r: '4', strokeWidth: '1.5', stroke: COLORS.white },
+          propsForBackgroundLines: { strokeDasharray: '', stroke: '#E5E7EB' },
+        }}
+        style={{ marginLeft: -12, borderRadius: 8 }}
+      />
+      {/* 60FPS 마스킹 애니메이션: 백색 박스가 좌에서 우로 차트를 걷어냄 */}
+      <Animated.View
+        pointerEvents="none"
+        style={{
+          position: 'absolute',
+          top: 0, bottom: 0, right: 0, left: 0,
+          backgroundColor: COLORS.white,
+          transform: [{ translateX: isFullscreen ? fsAnimMaskX : animMaskX }] // 크게보기 차트는 더 넓은 애니메이션 변수 적용
+        }}
+      />
+    </View>
+  );
 
   return (
     <View style={styles.root}>
@@ -135,29 +255,26 @@ export default function RiskScreen() {
           <Text style={styles.headerTitle}>리스크 지수</Text>
           <Text style={styles.headerSub}>지정학 위험 트렌드</Text>
         </View>
-
-        {/* 탭: 일간 / 월간 */}
         <View style={styles.tabRow}>
           <TabBtn label="일간" active={tab === 'daily'}   onPress={() => setTab('daily')} />
           <TabBtn label="월간" active={tab === 'monthly'} onPress={() => setTab('monthly')} />
         </View>
-
-        {/* 범위 칩: 10일 / 20일 / 전체 */}
         <View style={styles.rangeRow}>
+          <RangeChip label="전체" active={range === 'all'} onPress={() => setRange('all')} />
           <RangeChip label="10일" active={range === '10'}  onPress={() => setRange('10')} />
           <RangeChip label="20일" active={range === '20'}  onPress={() => setRange('20')} />
-          <RangeChip label="전체" active={range === 'all'} onPress={() => setRange('all')} />
+          <RangeChip label="필터 ⏱️" active={range === 'custom'} onPress={() => setShowFilterModal(true)} />
         </View>
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.body}>
         {loading && <ActivityIndicator color={COLORS.headerBg} style={{ marginBottom: 12 }} />}
 
-        {/* 통계 카드 2×2 */}
+        {/* 통계 카드 */}
         {aiStats && oilStats && (
           <View style={styles.statsGrid}>
             <StatCell
-              label="AI GPR"
+              label="AI 지정학적 위험 지수"
               value={formatIndex(aiStats.last)}
               sub={aiStats.change > 0 ? `▲+${aiStats.change}` : `▼${aiStats.change}`}
               subColor={aiStats.change > 0 ? COLORS.up : COLORS.down}
@@ -168,72 +285,139 @@ export default function RiskScreen() {
               sub={oilStats.change > 0 ? `▲+${oilStats.change}` : `▼${oilStats.change}`}
               subColor={oilStats.change > 0 ? COLORS.up : COLORS.down}
             />
-            <StatCell
-              label="기간 최고"
-              value={formatIndex(aiStats.max)}
-              sub={aiStats.maxDate ?? ''}
-            />
-            <StatCell
-              label="기간 최저"
-              value={formatIndex(aiStats.min)}
-              sub={aiStats.minDate ?? ''}
-            />
+            <StatCell label="기간 최고" value={formatIndex(aiStats.max)} sub={aiStats.maxDate ?? ''} />
+            <StatCell label="기간 최저" value={formatIndex(aiStats.min)} sub={aiStats.minDate ?? ''} />
           </View>
         )}
 
-        {/* 차트 카드 */}
+        {/* 차트 영역 */}
         <View style={styles.chartCard}>
-          <Text style={styles.chartTitle}>
-            {tab === 'daily' ? '일간' : '월간'} AI GPR 지수 추이
-          </Text>
-          <Text style={styles.chartSubtitle}>{dateRange}</Text>
-
-          {/* 범례 */}
-          <View style={styles.legendRow}>
-            {CHART_SERIES.map(s => (
-              <View key={s.key} style={styles.legendItem}>
-                <View style={[styles.legendDot, { backgroundColor: s.color }]} />
-                <Text style={styles.legendText}>{s.label}</Text>
-              </View>
-            ))}
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <View>
+              <Text style={styles.chartTitle}>{tab === 'daily' ? '일간' : '월간'} 지정학적 위험 지수</Text>
+              <Text style={styles.chartSubtitle}>{dateRange}</Text>
+            </View>
+            <TouchableOpacity style={styles.expandBtn} onPress={() => setShowFullscreen(true)}>
+              <Text style={styles.expandBtnText}>⛶ 크게 보기</Text>
+            </TouchableOpacity>
           </View>
 
-          {slicedData.length >= 2 && (
-            <LineChart
-              data={{
-                labels: chartLabels,
-                datasets: [
-                  { data: aiSeries,     color: () => '#D85A30', strokeWidth: 2   },
-                  { data: oilSeries,    color: () => '#EF9F27', strokeWidth: 1.5 },
-                  { data: gprSeries,    color: () => '#888780', strokeWidth: 1   },
-                  { data: nonOilSeries, color: () => '#2E86AB', strokeWidth: 1.5 },
-                ],
-              }}
-              width={CHART_WIDTH}
-              height={180}
-              withInnerLines
-              withOuterLines={false}
-              withShadow={false}
-              fromZero
-              chartConfig={{
-                backgroundColor: COLORS.white,
-                backgroundGradientFrom: COLORS.white,
-                backgroundGradientTo:   COLORS.white,
-                decimalPlaces: 0,
-                color:      (opacity = 1) => `rgba(30,58,95,${opacity})`,
-                labelColor: (opacity = 1) => `rgba(107,114,128,${opacity})`,
-                propsForDots: { r: '2', strokeWidth: '1', stroke: COLORS.white },
-                propsForBackgroundLines: { strokeDasharray: '', stroke: '#E5E7EB' },
-              }}
-              style={{ marginLeft: -12, borderRadius: 8 }}
-            />
+          <View style={styles.legendRow}>
+            {CHART_SERIES.map(s => {
+              const isActive = visibleSeries[s.key];
+              return (
+                <Pressable
+                  key={s.key}
+                  style={[styles.legendItem, !isActive && { opacity: 0.3 }]}
+                  onPress={() => setVisibleSeries(prev => ({ ...prev, [s.key]: !prev[s.key] }))}
+                >
+                  <View style={[styles.legendDot, { backgroundColor: s.color }]} />
+                  <Text style={[styles.legendText, !isActive && { textDecorationLine: 'line-through' }]}>
+                    {s.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
+          {slicedData.length >= 2 ? (
+            <ScrollView horizontal showsHorizontalScrollIndicator={true} bounces={false}>
+              {renderLineChart(chartWidth, 190)}
+            </ScrollView>
+          ) : (
+            <Text style={{ textAlign: 'center', color: '#999', marginVertical: 30 }}>데이터 부족</Text>
           )}
 
-          <Text style={styles.chartNote}>* 석유 공급 차질 지수는 ÷10 표시</Text>
+          <Text style={styles.chartNote}>* 차트를 좌우로 드래그(스와이프)하여 과거 항목을 확인합니다.</Text>
         </View>
-
         <View style={{ height: 20 }} />
       </ScrollView>
+
+      {/* 날짜 필터 모달 */}
+      <Modal visible={showFilterModal} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>사용자 지정 기간 설정</Text>
+            <Text style={styles.modalSub}>YYYY-MM-DD 형식 (숫자만 입력 시 자동 변환)</Text>
+            
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>시작 날짜</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="ex) 2026-03-01"
+                value={startDate}
+                onChangeText={(t) => handleDateInput(t, setStartDate)}
+                keyboardType="numeric"
+                maxLength={10}
+              />
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>종료 날짜</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="ex) 2026-03-31"
+                value={endDate}
+                onChangeText={(t) => handleDateInput(t, setEndDate)}
+                keyboardType="numeric"
+                maxLength={10}
+              />
+            </View>
+
+            <View style={styles.modalBtnRow}>
+              <TouchableOpacity style={styles.modalBtnCancel} onPress={() => setShowFilterModal(false)}>
+                <Text style={styles.modalBtnTextCancel}>취소</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={styles.modalBtnApply} 
+                onPress={() => { setRange('custom'); setShowFilterModal(false); }}
+              >
+                <Text style={styles.modalBtnTextApply}>그래프 적용</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* 차트 가로/세로 전체화면 확대 모달 */}
+      <Modal visible={showFullscreen} animationType="slide" onRequestClose={() => setShowFullscreen(false)}>
+        <View style={styles.fsRoot}>
+          <View style={[styles.fsHeader, { paddingTop: Platform.OS === 'ios' ? insets.top + 5 : 15 }]}>
+            <Text style={styles.fsTitle}>상세 차트 분석</Text>
+            <TouchableOpacity onPress={() => setShowFullscreen(false)} style={styles.fsCloseBtn}>
+              <Text style={styles.fsCloseText}>✕ 닫기</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={styles.fsBody}>
+            <Text style={styles.chartSubtitle}>{dateRange} 세부 동향</Text>
+
+            {/* 범례 토글 추가 (크게 보기 화면에서도 제어 가능) */}
+            <View style={styles.legendRow}>
+              {CHART_SERIES.map(s => {
+                const isActive = visibleSeries[s.key];
+                return (
+                  <Pressable
+                    key={s.key}
+                    style={[styles.legendItem, !isActive && { opacity: 0.3 }]}
+                    onPress={() => setVisibleSeries(prev => ({ ...prev, [s.key]: !prev[s.key] }))}
+                  >
+                    <View style={[styles.legendDot, { backgroundColor: s.color }]} />
+                    <Text style={[styles.legendText, !isActive && { textDecorationLine: 'line-through' }]}>
+                      {s.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            <ScrollView horizontal showsHorizontalScrollIndicator={true} bounces={false}>
+              {/* 더욱 거대해진 넓이와 높이의 차트 */}
+              {renderLineChart(fsChartWidth, SCREEN_H * 0.65, true)}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
     </View>
   );
 }
@@ -243,64 +427,73 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: COLORS.screenBg },
 
   // Header
-  header: {
-    backgroundColor: COLORS.headerBg,
-    paddingHorizontal: 16, paddingBottom: 12,
-  },
-  headerTop:    { marginBottom: 12 },
-  headerTitle:  { fontSize: 17, fontWeight: '700', color: COLORS.headerText },
-  headerSub:    { fontSize: 10, color: COLORS.headerAccent, marginTop: 2 },
+  header: { backgroundColor: COLORS.headerBg, paddingHorizontal: 16, paddingBottom: 12 },
+  headerTop: { marginBottom: 12 },
+  headerTitle: { fontSize: 17, fontWeight: '700', color: COLORS.headerText },
+  headerSub: { fontSize: 10, color: COLORS.headerAccent, marginTop: 2 },
 
   // Tabs
   tabRow: { flexDirection: 'row', gap: 8, marginBottom: 10 },
-  tabBtn: {
-    borderRadius: 20, paddingHorizontal: 16, paddingVertical: 5,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)',
-  },
-  tabBtnActive:     { backgroundColor: COLORS.white },
-  tabBtnText:       { fontSize: 12, color: 'rgba(255,255,255,0.65)' },
+  tabBtn: { borderRadius: 20, paddingHorizontal: 16, paddingVertical: 5, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)' },
+  tabBtnActive: { backgroundColor: COLORS.white },
+  tabBtnText: { fontSize: 12, color: 'rgba(255,255,255,0.65)' },
   tabBtnTextActive: { color: COLORS.headerBg, fontWeight: '700' },
 
   // Range chips
   rangeRow: { flexDirection: 'row', gap: 8 },
-  rangeChip: {
-    borderRadius: 14, paddingHorizontal: 12, paddingVertical: 4,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)',
-  },
-  rangeChipActive:     { borderColor: 'rgba(255,255,255,0.5)' },
-  rangeChipText:       { fontSize: 11, color: 'rgba(255,255,255,0.5)' },
-  rangeChipTextActive: { color: 'rgba(255,255,255,0.9)' },
+  rangeChip: { borderRadius: 14, paddingHorizontal: 12, paddingVertical: 4, borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)' },
+  rangeChipActive: { borderColor: 'rgba(255,255,255,0.5)', backgroundColor: 'rgba(255,255,255,0.1)' },
+  rangeChipText: { fontSize: 11, color: 'rgba(255,255,255,0.5)' },
+  rangeChipTextActive: { color: 'rgba(255,255,255,1)' },
 
   // Body
   body: { padding: 14 },
-
-  // Stats grid 2×2
   statsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 14 },
   statCell: {
-    flex: 1, minWidth: '45%',
-    backgroundColor: COLORS.white, borderRadius: 14, padding: 14,
-    ...Platform.select({
-      ios:     { shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 6 },
-      android: { elevation: 1 },
-    }),
+    flex: 1, minWidth: '45%', backgroundColor: COLORS.white, borderRadius: 14, padding: 14,
+    ...Platform.select({ ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 6 }, android: { elevation: 1 } }),
   },
   statLabel: { fontSize: 11, color: COLORS.textMuted, marginBottom: 4 },
-  statValue: { fontSize: 20, fontWeight: '700', color: COLORS.textPrimary, marginBottom: 2 },
-  statSub:   { fontSize: 11, color: COLORS.textMuted },
+  statValue: { fontSize: 18, fontWeight: '700', color: COLORS.textPrimary, marginBottom: 2, flexShrink: 1 },
+  statSub: { fontSize: 11, color: COLORS.textMuted },
 
-  // Chart card
+  // Chart
   chartCard: {
     backgroundColor: COLORS.white, borderRadius: 14, padding: 14,
-    ...Platform.select({
-      ios:     { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8 },
-      android: { elevation: 2 },
-    }),
+    ...Platform.select({ ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8 }, android: { elevation: 2 } }),
   },
-  chartTitle:    { fontSize: 12, fontWeight: '700', color: COLORS.textPrimary, marginBottom: 2 },
-  chartSubtitle: { fontSize: 10, color: COLORS.textMuted, marginBottom: 10 },
-  legendRow:     { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 10 },
-  legendItem:    { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  legendDot:     { width: 8, height: 8, borderRadius: 4 },
-  legendText:    { fontSize: 10, color: COLORS.textMuted },
-  chartNote:     { fontSize: 9, color: COLORS.textLight, marginTop: 8 },
+  chartTitle: { fontSize: 13, fontWeight: '700', color: COLORS.textPrimary, marginBottom: 2 },
+  chartSubtitle: { fontSize: 10, color: COLORS.textMuted, marginBottom: 12 },
+  expandBtn: { backgroundColor: '#F3F4F6', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 },
+  expandBtnText: { fontSize: 11, fontWeight: '700', color: COLORS.textPrimary },
+  legendRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 12 },
+  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 6, paddingHorizontal: 10, backgroundColor: '#F3F4F6', borderRadius: 8 },
+  legendDot: { width: 10, height: 10, borderRadius: 5 },
+  legendText: { fontSize: 12, color: COLORS.textPrimary, fontWeight: '600' },
+  chartNote: { fontSize: 10, color: COLORS.textLight, marginTop: 4 },
+
+  // Filter Modal
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 },
+  modalContent: {
+    width: '100%', maxWidth: 320, backgroundColor: COLORS.white, borderRadius: 16, padding: 20,
+    ...Platform.select({ ios: { shadowColor: '#000', shadowOffset: {width: 0, height: 4}, shadowOpacity: 0.1, shadowRadius: 10 }, android: { elevation: 4 } })
+  },
+  modalTitle: { fontSize: 16, fontWeight: '700', color: COLORS.textPrimary, marginBottom: 4 },
+  modalSub: { fontSize: 11, color: COLORS.textMuted, marginBottom: 16 },
+  inputGroup: { marginBottom: 12 },
+  inputLabel: { fontSize: 11, color: COLORS.textMuted, marginBottom: 4, fontWeight: '600' },
+  modalInput: { borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: COLORS.textPrimary, backgroundColor: '#F9FAFB' },
+  modalBtnRow: { flexDirection: 'row', justifyContent: 'flex-end', gap: 8, marginTop: 10 },
+  modalBtnCancel: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 8 },
+  modalBtnTextCancel: { fontSize: 14, color: COLORS.textMuted, fontWeight: '600' },
+  modalBtnApply: { backgroundColor: COLORS.headerBg, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 8 },
+  modalBtnTextApply: { fontSize: 14, color: COLORS.white, fontWeight: '700' },
+
+  // Fullscreen Modal
+  fsRoot: { flex: 1, backgroundColor: COLORS.white },
+  fsHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: COLORS.headerBg, paddingHorizontal: 16, paddingBottom: 16 },
+  fsTitle: { fontSize: 18, fontWeight: '700', color: COLORS.white },
+  fsCloseBtn: { padding: 8, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 8 },
+  fsCloseText: { fontSize: 13, fontWeight: '700', color: COLORS.white },
+  fsBody: { flex: 1, padding: 20, paddingTop: 30 },
 });

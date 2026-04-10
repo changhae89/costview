@@ -248,7 +248,7 @@ export default function DashboardScreen() {
 
         {/* 리스크 카드 3개 */}
         <View style={styles.riskRow}>
-          <RiskCard label="AI GPR"   value={latest.ai_gpr_index}    change={aiChange} />
+          <RiskCard label="AI 지정학적 위험 지수"   value={latest.ai_gpr_index}    change={aiChange} />
           <RiskCard label="석유차질"  value={latest.oil_disruptions}  change={oilChange} />
           <RiskCard label="비석유"   value={latest.non_oil_gpr}      change={nonOilChange} />
         </View>
