@@ -26,10 +26,10 @@ const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 const CHART_MIN_WIDTH = SCREEN_W - 28;
 
 const CHART_SERIES = [
-  { key: 'ai_gpr_index',    label: 'AI 지정학적 위험 지수',       color: '#D85A30' },
+  { key: 'ai_gpr_index', label: 'AI 지정학적 위험 지수', color: '#D85A30' },
   { key: 'oil_disruptions', label: '석유 차질(÷10)', color: '#EF9F27' },
-  { key: 'gpr_original',    label: '기존 GPR',      color: '#888780' },
-  { key: 'non_oil_gpr',     label: '비석유',         color: '#2E86AB' },
+  { key: 'gpr_original', label: '기존 GPR', color: '#888780' },
+  { key: 'non_oil_gpr', label: '비석유', color: '#2E86AB' },
 ];
 
 // ── Mock 데이터 ────────────────────────────────────────────────
@@ -78,9 +78,9 @@ function StatCell({ label, value, sub, subColor }) {
 // ── 메인 화면 ─────────────────────────────────────────────────
 export default function RiskScreen() {
   const insets = useSafeAreaInsets();
-  const [tab, setTab]   = useState('daily');   // 'daily' | 'monthly'
+  const [tab, setTab] = useState('daily');   // 'daily' | 'monthly'
   const [range, setRange] = useState('20');    // 앱 크래시 방지를 위해 기본값을 'all'에서 '20'으로 변경
-  const [daily, setDaily]     = useState(MOCK_DAILY);
+  const [daily, setDaily] = useState(MOCK_DAILY);
   const [monthly, setMonthly] = useState([]);
   const [loading, setLoading] = useState(false);
 
@@ -150,7 +150,7 @@ export default function RiskScreen() {
     return result;
   }, [rawData, range, startDate, endDate]);
 
-  const aiStats  = useMemo(() => calcStats(slicedData, 'ai_gpr_index'),    [slicedData]);
+  const aiStats = useMemo(() => calcStats(slicedData, 'ai_gpr_index'), [slicedData]);
   const oilStats = useMemo(() => calcStats(slicedData, 'oil_disruptions'), [slicedData]);
 
   // 그래프 가로 확대/스크롤 (보이는 데이터 포인트당 35px 지정)
@@ -162,7 +162,7 @@ export default function RiskScreen() {
     animMaskX.setValue(0);
     Animated.timing(animMaskX, {
       toValue: chartWidth, // 마스크를 우측으로 끝까지 밀어냄
-      duration: 1200,
+      duration: 2500,      // 너무 빠르지 않도록 1.2초 -> 2.5초로 연장
       easing: Easing.out(Easing.cubic),
       useNativeDriver: true, // 60FPS 네이티브 구동 보장
     }).start();
@@ -170,37 +170,44 @@ export default function RiskScreen() {
     fsAnimMaskX.setValue(0);
     Animated.timing(fsAnimMaskX, {
       toValue: fsChartWidth, // 크게보기용 더 넓은 너비
-      duration: 1200,
+      duration: 2000,      // 1.2초 -> 2.0초로 연장
       easing: Easing.out(Easing.cubic),
       useNativeDriver: true,
     }).start();
   }, [slicedData, visibleSeries, chartWidth, fsChartWidth, showFullscreen]);
 
-  // 차트 레이블: 부분 노출 및 YY-MM-DD
-  const chartLabels = useMemo(() =>
-    slicedData.map((d, i) => {
-      const step = Math.ceil(slicedData.length / (chartWidth / 55));
-      if (i % step === 0) {
-        return d.reference_date?.slice(2) ?? '';
-      }
-      return '';
-    }),
-    [slicedData, chartWidth],
-  );
+  // 차트 레이블 및 데이터셋 추출 최적화 (다중 루프 제거 -> O(N) 단일 루프)
+  const { chartLabels, activeDatasets } = useMemo(() => {
+    const labels = [];
+    const aiData = [];
+    const oilData = [];
+    const gprData = [];
+    const nonOilData = [];
 
-  const aiSeries     = slicedData.map(d => Number(d.ai_gpr_index)    || 0);
-  const oilSeries    = slicedData.map(d => (Number(d.oil_disruptions) || 0) / 10);
-  const gprSeries    = slicedData.map(d => Number(d.gpr_original)    || 0);
-  const nonOilSeries = slicedData.map(d => Number(d.non_oil_gpr)     || 0);
+    const step = Math.ceil(slicedData.length / (chartWidth / 55));
 
-  const activeDatasets = [
-    visibleSeries.ai_gpr_index ? { data: aiSeries, color: () => '#D85A30', strokeWidth: 2 } : null,
-    visibleSeries.oil_disruptions ? { data: oilSeries, color: () => '#EF9F27', strokeWidth: 1.5 } : null,
-    visibleSeries.gpr_original ? { data: gprSeries, color: () => '#888780', strokeWidth: 1 } : null,
-    visibleSeries.non_oil_gpr ? { data: nonOilSeries, color: () => '#2E86AB', strokeWidth: 1.5 } : null,
-  ].filter(Boolean);
+    for (let i = 0; i < slicedData.length; i++) {
+      const d = slicedData[i];
+      labels.push(i % step === 0 ? (d.reference_date?.slice(2) ?? '') : '');
+      aiData.push(Number(d.ai_gpr_index) || 0);
+      oilData.push((Number(d.oil_disruptions) || 0) / 10);
+      gprData.push(Number(d.gpr_original) || 0);
+      nonOilData.push(Number(d.non_oil_gpr) || 0);
+    }
 
-  if (activeDatasets.length === 0) activeDatasets.push({ data: [0], color: () => 'transparent' });
+    const datasets = [
+      visibleSeries.ai_gpr_index && { data: aiData, color: () => '#D85A30', strokeWidth: 2 },
+      visibleSeries.oil_disruptions && { data: oilData, color: () => '#EF9F27', strokeWidth: 1.5 },
+      visibleSeries.gpr_original && { data: gprData, color: () => '#888780', strokeWidth: 1 },
+      visibleSeries.non_oil_gpr && { data: nonOilData, color: () => '#2E86AB', strokeWidth: 1.5 },
+    ].filter(Boolean);
+
+    if (datasets.length === 0) {
+      datasets.push({ data: [0], color: () => 'transparent' });
+    }
+
+    return { chartLabels: labels, activeDatasets: datasets };
+  }, [slicedData, chartWidth, visibleSeries]);
 
   const dateRange = slicedData.length >= 2
     ? `${slicedData[0].reference_date} ~ ${slicedData[slicedData.length - 1].reference_date}`
@@ -223,9 +230,9 @@ export default function RiskScreen() {
         chartConfig={{
           backgroundColor: COLORS.white,
           backgroundGradientFrom: COLORS.white,
-          backgroundGradientTo:   COLORS.white,
+          backgroundGradientTo: COLORS.white,
           decimalPlaces: 0,
-          color:      (opacity = 1) => `rgba(30,58,95,${opacity})`,
+          color: (opacity = 1) => `rgba(30,58,95,${opacity})`,
           labelColor: (opacity = 1) => `rgba(107,114,128,${opacity})`,
           propsForDots: { r: '4', strokeWidth: '1.5', stroke: COLORS.white },
           propsForBackgroundLines: { strokeDasharray: '', stroke: '#E5E7EB' },
@@ -256,13 +263,13 @@ export default function RiskScreen() {
           <Text style={styles.headerSub}>지정학 위험 트렌드</Text>
         </View>
         <View style={styles.tabRow}>
-          <TabBtn label="일간" active={tab === 'daily'}   onPress={() => setTab('daily')} />
+          <TabBtn label="일간" active={tab === 'daily'} onPress={() => setTab('daily')} />
           <TabBtn label="월간" active={tab === 'monthly'} onPress={() => setTab('monthly')} />
         </View>
         <View style={styles.rangeRow}>
           <RangeChip label="전체" active={range === 'all'} onPress={() => setRange('all')} />
-          <RangeChip label="10일" active={range === '10'}  onPress={() => setRange('10')} />
-          <RangeChip label="20일" active={range === '20'}  onPress={() => setRange('20')} />
+          <RangeChip label="10일" active={range === '10'} onPress={() => setRange('10')} />
+          <RangeChip label="20일" active={range === '20'} onPress={() => setRange('20')} />
           <RangeChip label="필터 ⏱️" active={range === 'custom'} onPress={() => setShowFilterModal(true)} />
         </View>
       </View>
@@ -339,7 +346,7 @@ export default function RiskScreen() {
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>사용자 지정 기간 설정</Text>
             <Text style={styles.modalSub}>YYYY-MM-DD 형식 (숫자만 입력 시 자동 변환)</Text>
-            
+
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>시작 날짜</Text>
               <TextInput
@@ -368,8 +375,8 @@ export default function RiskScreen() {
               <TouchableOpacity style={styles.modalBtnCancel} onPress={() => setShowFilterModal(false)}>
                 <Text style={styles.modalBtnTextCancel}>취소</Text>
               </TouchableOpacity>
-              <TouchableOpacity 
-                style={styles.modalBtnApply} 
+              <TouchableOpacity
+                style={styles.modalBtnApply}
                 onPress={() => { setRange('custom'); setShowFilterModal(false); }}
               >
                 <Text style={styles.modalBtnTextApply}>그래프 적용</Text>
@@ -476,7 +483,7 @@ const styles = StyleSheet.create({
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 },
   modalContent: {
     width: '100%', maxWidth: 320, backgroundColor: COLORS.white, borderRadius: 16, padding: 20,
-    ...Platform.select({ ios: { shadowColor: '#000', shadowOffset: {width: 0, height: 4}, shadowOpacity: 0.1, shadowRadius: 10 }, android: { elevation: 4 } })
+    ...Platform.select({ ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 10 }, android: { elevation: 4 } })
   },
   modalTitle: { fontSize: 16, fontWeight: '700', color: COLORS.textPrimary, marginBottom: 4 },
   modalSub: { fontSize: 11, color: COLORS.textMuted, marginBottom: 16 },
