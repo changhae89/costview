@@ -273,6 +273,7 @@ export default function NewsListScreen() {
   const [dirFilter, setDirFilter] = useState('');
   const [catFilter, setCatFilter] = useState('');
   const [sortAsc, setSortAsc] = useState(false);
+  const [showSearch, setShowSearch] = useState(false);
 
   useEffect(() => {
     fetchNewsList()
@@ -327,23 +328,30 @@ export default function NewsListScreen() {
 
       {/* 헤더 */}
       <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
-        <View style={styles.headerTop}>
-          <Text style={styles.headerTitle}>뉴스</Text>
-          <Text style={styles.headerSub}>WAR PRICE RADAR</Text>
+        <View style={[styles.headerTop, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}>
+          <View>
+            <Text style={styles.headerTitle}>뉴스</Text>
+            <Text style={styles.headerSub}>WAR PRICE RADAR</Text>
+          </View>
+          <TouchableOpacity onPress={() => setShowSearch(!showSearch)} style={{ padding: 5 }}>
+            <Text style={{ fontSize: 18, color: COLORS.white }}>🔍</Text>
+          </TouchableOpacity>
         </View>
 
         {/* 검색 */}
-        <View style={styles.searchBox}>
-          <Text style={styles.searchIcon}>🔍</Text>
-          <TextInput
-            style={styles.searchInput}
-            placeholder="뉴스·키워드 검색"
-            placeholderTextColor={COLORS.headerMuted}
-            value={query}
-            onChangeText={setQuery}
-            returnKeyType="search"
-          />
-        </View>
+        {showSearch && (
+          <View style={styles.searchBox}>
+            <Text style={styles.searchIcon}>🔍</Text>
+            <TextInput
+              style={styles.searchInput}
+              placeholder="뉴스·키워드 검색"
+              placeholderTextColor={COLORS.headerMuted}
+              value={query}
+              onChangeText={setQuery}
+              returnKeyType="search"
+            />
+          </View>
+        )}
 
         {/* 필터 칩 */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>

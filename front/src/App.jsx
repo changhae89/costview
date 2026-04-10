@@ -83,6 +83,7 @@ export default function App() {
       <SafeAreaProvider>
         <NavigationContainer>
           <Tab.Navigator
+            initialRouteName="Dashboard"
             screenOptions={{
               headerShown: false,
               tabBarStyle: tabStyles.tabBar,
