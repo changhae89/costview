@@ -289,8 +289,8 @@ export default function PredictionListScreen() {
       }
       return false;
     };
-    BackHandler.addEventListener('hardwareBackPress', onBackPress);
-    return () => BackHandler.removeEventListener('hardwareBackPress', onBackPress);
+    const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => subscription.remove();
   }, [selected]);
 
   const filtered = predictions.filter(item => {
