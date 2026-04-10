@@ -7,8 +7,9 @@
     "userInterfaceStyle": "light",
     "scheme": "costview",
     "splash": {
+      "image": "./logo/logo1.png",
       "resizeMode": "contain",
-      "backgroundColor": "#1E3A5F"
+      "backgroundColor": "#ffffff"
     },
     "assetBundlePatterns": [
       "**/*"
