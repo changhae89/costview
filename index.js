@@ -1,5 +1,8 @@
-import { registerRootComponent } from "expo";
+import { registerRootComponent } from 'expo';
+import { enableScreens } from 'react-native-screens';
 
-import App from "./src/App.jsx";
+enableScreens();
+
+import App from './src/App.jsx';
 
 registerRootComponent(App);

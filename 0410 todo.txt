@@ -1,0 +1,92 @@
+- 네비게이션 바에 대시보드, 품목예측에 글자 몇개가 다음줄로 넘어가는 현상 수정
+- 리스크 탭에서 수치가 2025년 9월 데이터를 가져오는 현상을 최신 데이터로 가져오게 수정
+(추후에 기간을 직접 설정 가능하게끔 수정)
+- 뉴스, 품목예측 등에서 문서 하나 들어간 뒤 뒤로가기 눌렀을 때 원래 있던 화면이 아닌 대시보드로 가지는 현상 수정
+- 네비게이션 순서를 뉴스 -> 품목예측 -> 대시보드 -> 리스크지수 -> 설정 으로 변경 (설정은 새로 추가)
+- 앱을 실행할 때 로딩화면 대신 logo 폴더 내에 있는 logo.png을 화면 중앙에 띄워주고, 그 밑에 스피너가 돌아가게 해줘.
+밑의 코드를 이용해서 부탁해
+npx expo install expo-splash-screen expo-font
+import React, { useEffect, useState, useCallback } from 'react';
+import { View, Text, Image, StyleSheet } from 'react-native';
+import * as SplashScreen from 'expo-splash-screen';
+// 메인 화면 컴포넌트 (가정)
+import MainScreen from './src/screens/MainScreen'; 
+// 앱이 준비될 때까지 스플래시 화면을 유지함
+SplashScreen.preventAutoHideAsync();
+export default function App() {
+  const [appIsReady, setAppIsReady] = useState(false);
+  useEffect(() => {
+    async function prepare() {
+      try {
+        // 여기서 로고 이미지나 폰트 등을 미리 로딩합니다.
+        // 예: 프로젝트 의의를 담은 텍스트 데이터 로딩 등
+        await new Promise(resolve => setTimeout(resolve, 3000)); // 3초 정도 대기 (테스트용)
+      } catch (e) {
+        console.warn(e);
+      } finally {
+        setAppIsReady(true);
+      }
+    }
+    prepare();
+  }, []);
+  const onLayoutRootView = useCallback(async () => {
+    if (appIsReady) {
+      // 앱이 준비되면 네이티브 스플래시를 숨깁니다.
+      await SplashScreen.hideAsync();
+    }
+  }, [appIsReady]);
+  if (!appIsReady) {
+    // 🎨 바로 이 부분이 우리가 커스텀하게 꾸미는 로딩 화면입니다!
+    return (
+      <View style={styles.loadingContainer}>
+        {/* 팀 로고 */}
+        <Image 
+          source={require('./assets/team-logo.png')} 
+          style={styles.logo} 
+        />
+        {/* 프로젝트 의의 텍스트 */}
+        <Text style={styles.title}>Project: Our Vision</Text>
+        <Text style={styles.description}>
+          "우리는 기술로 세상을 더 따뜻하게 만듭니다."
+        </Text>
+      </View>
+    );
+  }
+  // 로딩이 끝나면 실제 앱 화면을 보여줌
+  return (
+    <View style={{ flex: 1 }} onLayout={onLayoutRootView}>
+      <MainScreen />
+    </View>
+  );
+}
+const styles = StyleSheet.create({
+  loadingContainer: {
+    flex: 1,
+    backgroundColor: '#ffffff', // 팀 브랜드 컬러
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  logo: {
+    width: 150,
+    height: 150,
+    marginBottom: 20,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 10,
+  },
+  description: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+    paddingHorizontal: 40,
+  },
+});
+
+
+- 백엔드 , 프론트 폴더 분리 ( app 에서 두갈래길로 백, 프론트 폴더가 나오게)
+- 백엔드, 프론트에 각각 필요로 하는 파일이 뭔지 정의
+- 그 다음 사용할때 너가 정의한 필요한 파일만 사용하게끔
+- 
