@@ -236,8 +236,8 @@ export default function DashboardScreen() {
       <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
         <View style={styles.headerTop}>
           <View>
-            <Text style={styles.headerTitle}>물가 레이더</Text>
-            <Text style={styles.headerSub}>WAR PRICE RADAR</Text>
+            <Text style={styles.headerTitle}>대시보드</Text>
+            <Text style={styles.headerSub}>실시간 종합 현황</Text>
           </View>
           {latest.reference_date ? (
             <View style={styles.dateBadge}>

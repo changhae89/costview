@@ -1,8 +1,8 @@
 // 물가 레이더 컬러 시스템
 export const COLORS = {
-  // 헤더
-  headerBg: '#1E3A5F',
-  headerAccent: '#5BB3D8',
+  // 헤더 (MINT 팀 테마 - 약간 어두운 민트)
+  headerBg: '#0D9488', // 기존 밝은 민트(#1ABC9C) -> 차분하고 깊은 민트
+  headerAccent: '#5EEAD4', 
   headerText: '#FFFFFF',
   headerMuted: '#7FA3C0',
 
@@ -35,7 +35,7 @@ export const COLORS = {
   borderHalf: '#E5E7EB',
 
   // 탭
-  tabActive: '#1E3A5F',
+  tabActive: '#0D9488', // 탭 활성화 색상도 민트색 동기화
   tabInactive: '#9CA3AF',
 
   // 강도 닷

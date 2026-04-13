@@ -331,7 +331,7 @@ export default function NewsListScreen() {
         <View style={[styles.headerTop, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}>
           <View>
             <Text style={styles.headerTitle}>뉴스</Text>
-            <Text style={styles.headerSub}>WAR PRICE RADAR</Text>
+            <Text style={styles.headerSub}>실시간 뉴스 분석</Text>
           </View>
           <TouchableOpacity onPress={() => setShowSearch(!showSearch)} style={{ padding: 5 }}>
             <Text style={{ fontSize: 18, color: COLORS.white }}>🔍</Text>
