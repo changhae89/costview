@@ -32,19 +32,6 @@ const CHART_SERIES = [
   { key: 'non_oil_gpr', label: '비석유', color: '#2E86AB' },
 ];
 
-// ── Mock 데이터 ────────────────────────────────────────────────
-const MOCK_DAILY = [
-  { reference_date: '2026-03-22', ai_gpr_index: 170.8, oil_disruptions: 1200, gpr_original: 145.0, non_oil_gpr: 100.0 },
-  { reference_date: '2026-03-23', ai_gpr_index: 185.2, oil_disruptions: 1280, gpr_original: 150.0, non_oil_gpr: 108.0 },
-  { reference_date: '2026-03-24', ai_gpr_index: 200.0, oil_disruptions: 1350, gpr_original: 160.0, non_oil_gpr: 115.0 },
-  { reference_date: '2026-03-25', ai_gpr_index: 215.5, oil_disruptions: 1420, gpr_original: 168.0, non_oil_gpr: 120.0 },
-  { reference_date: '2026-03-26', ai_gpr_index: 225.0, oil_disruptions: 1480, gpr_original: 172.0, non_oil_gpr: 125.0 },
-  { reference_date: '2026-03-27', ai_gpr_index: 232.2, oil_disruptions: 1550, gpr_original: 175.0, non_oil_gpr: 130.0 },
-  { reference_date: '2026-03-28', ai_gpr_index: 345.8, oil_disruptions: 1620, gpr_original: 180.0, non_oil_gpr: 135.0 },
-  { reference_date: '2026-03-29', ai_gpr_index: 280.1, oil_disruptions: 1680, gpr_original: 178.0, non_oil_gpr: 140.0 },
-  { reference_date: '2026-03-30', ai_gpr_index: 232.2, oil_disruptions: 1370, gpr_original: 197.1, non_oil_gpr: 154.7 },
-  { reference_date: '2026-03-31', ai_gpr_index: 250.6, oil_disruptions: 1717, gpr_original: 154.7, non_oil_gpr: 112.3 },
-];
 
 // ── 탭 버튼 ───────────────────────────────────────────────────
 function TabBtn({ label, active, onPress }) {
@@ -80,9 +67,9 @@ export default function RiskScreen() {
   const insets = useSafeAreaInsets();
   const [tab, setTab] = useState('daily');   // 'daily' | 'monthly'
   const [range, setRange] = useState('20');    // 앱 크래시 방지를 위해 기본값을 'all'에서 '20'으로 변경
-  const [daily, setDaily] = useState(MOCK_DAILY);
+  const [daily, setDaily] = useState([]);
   const [monthly, setMonthly] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   // 모달 및 필터 State
   const [showFilterModal, setShowFilterModal] = useState(false);

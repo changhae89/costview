@@ -94,7 +94,7 @@ export async function fetchNewsList() {
     .from('news_analyses')
     .select(`
       id, summary, reliability, created_at,
-      raw_news:raw_news_id(title, keyword, increased_items, decreased_items, is_deleted, published_at),
+      raw_news:raw_news_id(title, keyword, increased_items, decreased_items, is_deleted),
       causal_chains(category, direction, magnitude)
     `)
     .gte('reliability', 0.3)

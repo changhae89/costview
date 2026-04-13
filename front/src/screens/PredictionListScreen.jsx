@@ -13,6 +13,7 @@ import {
   Text,
   TouchableOpacity,
   View,
+  ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CATEGORY_MAP, DIRECTION_MAP, MAGNITUDE_MAP } from '../constants/category';
@@ -21,50 +22,7 @@ import { fetchPredictions } from '../lib/supabase';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
-// ── Mock 데이터 ────────────────────────────────────────────────
-const MOCK_PREDICTIONS = [
-  {
-    id: 'p1', category: 'travel', direction: 'up', magnitude: 'high',
-    change_pct_min: 22.2, change_pct_max: 28.6,
-    event: '항공 연료비 급등', result: '항공권·수하물 요금 인상',
-    mechanism: '유가 상승으로 항공사 운영비가 증가하여 항공권과 수하물 요금이 동반 상승하고 있습니다.',
-    monthly_impact: 3,
-    news_analyses: [
-      { id: 'n1', summary: '항공사 수하물 요금 인상 예고', reliability: 0.92, raw_news: { title: 'Airlines Raise Fees' } },
-      { id: 'n2', summary: '국제선 항공권 가격 상승세', reliability: 0.75, raw_news: { title: 'Flight Prices Surge' } },
-    ],
-  },
-  {
-    id: 'p2', category: 'fuel', direction: 'down', magnitude: 'medium',
-    change_pct_min: -5, change_pct_max: -2,
-    event: '러시아 원유 제재 완화', result: '국제유가 하락',
-    mechanism: '러시아 원유 공급량 증가 기대감이 국제유가 하락 압력으로 작용 중입니다.',
-    monthly_impact: 2,
-    news_analyses: [
-      { id: 'n3', summary: '러시아 원유 공급 증가 전망', reliability: 0.72, raw_news: { title: 'Russia Oil Supply' } },
-    ],
-  },
-  {
-    id: 'p3', category: 'utility', direction: 'down', magnitude: 'low',
-    change_pct_min: -5, change_pct_max: -5,
-    event: '유럽 천연가스 공급 정상화', result: '전기요금 안정',
-    mechanism: '노르웨이 및 LNG 수입 증가로 유럽 천연가스 공급이 회복되며 전기요금이 안정되고 있습니다.',
-    monthly_impact: 2,
-    news_analyses: [
-      { id: 'n4', summary: '유럽 가스 공급 정상화', reliability: 0.55, raw_news: { title: 'European Gas Normalizes' } },
-    ],
-  },
-  {
-    id: 'p4', category: 'dining', direction: 'neutral', magnitude: 'low',
-    change_pct_min: 0, change_pct_max: 0,
-    event: '식품 공급망 안정', result: '식음료 가격 중립 유지',
-    mechanism: '글로벌 곡물 공급이 안정되면서 식음료 가격에 큰 변동이 없을 것으로 예상됩니다.',
-    monthly_impact: 1,
-    news_analyses: [
-      { id: 'n5', summary: '식품 공급망 안정세', reliability: 0.45, raw_news: { title: 'Food Supply Stable' } },
-    ],
-  },
-];
+
 
 const FILTER_CHIPS = [
   { label: '전체',       value: '',        type: 'all' },
@@ -270,15 +228,17 @@ function PredictionDetailView({ item, onClose, topInset }) {
 // ── 목록 메인 ─────────────────────────────────────────────────
 export default function PredictionListScreen() {
   const insets = useSafeAreaInsets();
-  const [predictions, setPredictions] = useState(MOCK_PREDICTIONS);
+  const [predictions, setPredictions] = useState([]);
   const [selected, setSelected] = useState(null);
   const [dirFilter, setDirFilter] = useState('');
   const [catFilter, setCatFilter] = useState('');
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetchPredictions()
       .then(data => { if (data?.length > 0) setPredictions(data); })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, []);
 
   useEffect(() => {
@@ -346,6 +306,7 @@ export default function PredictionListScreen() {
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.listContent}>
         <Text style={styles.listSectionLabel}>카테고리별 예측 ({filtered.length}건)</Text>
+        {loading && <ActivityIndicator color={COLORS.headerBg} style={{ marginBottom: 12, marginTop: 10 }} />}
         {filtered.map(item => (
           <PredictionCard key={item.id} item={item} onPress={setSelected} />
         ))}

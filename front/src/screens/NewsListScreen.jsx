@@ -14,6 +14,7 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import DirectionDot from '../components/DirectionDot';
@@ -24,57 +25,6 @@ import { fetchNewsList } from '../lib/supabase';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
-// ── Mock 데이터 ────────────────────────────────────────────────
-const MOCK_NEWS = [
-  {
-    id: '1', summary: '항공사 수하물 요금 인상 예고, 여름 성수기 앞두고 여행 비용 증가',
-    reliability: 0.92, created_at: '2026-03-31T12:00:00Z',
-    raw_news: { title: 'Airlines Raise Baggage Fees Ahead of Summer', keyword: ['airline', 'travel', 'fee'], increased_items: ['fuel'], decreased_items: [], published_at: '2026-03-31' },
-    causal_chains: [{ direction: 'up', category: 'travel', magnitude: 'high', event: '항공사 연료 비용 상승', result: '수하물 요금 인상', mechanism: '유가 상승으로 인한 항공사 운영비 증가가 수하물 요금에 전가됨' }],
-  },
-  {
-    id: '2', summary: '러시아 석유 제재 완화 논의, 국제유가 하락 압력',
-    reliability: 0.72, created_at: '2026-03-30T09:00:00Z',
-    raw_news: { title: 'Russia Oil Sanctions Easing Talks', keyword: ['oil', 'sanction', 'war'], increased_items: [], decreased_items: ['fuel'], published_at: '2026-03-30' },
-    causal_chains: [{ direction: 'down', category: 'fuel', magnitude: 'medium', event: '러시아 원유 공급 증가', result: '국제유가 하락', mechanism: '서방 제재 완화 협상으로 러시아 원유 공급량 증가 예상' }],
-  },
-  {
-    id: '3', summary: '유럽 천연가스 공급 정상화로 전기요금 안정세 전망',
-    reliability: 0.55, created_at: '2026-03-29T15:00:00Z',
-    raw_news: { title: 'European Gas Supply Normalizes', keyword: ['gas', 'utility', 'europe'], increased_items: [], decreased_items: ['utility'], published_at: '2026-03-29' },
-    causal_chains: [{ direction: 'down', category: 'utility', magnitude: 'low', event: '유럽 가스 저장량 회복', result: '에너지 가격 하락', mechanism: '노르웨이 및 LNG 수입 증가로 유럽 천연가스 공급 정상화' }],
-  },
-  {
-    id: '4', summary: '홍해 물류 차질, 소비재 가격 상승 압력 지속',
-    reliability: 0.88, created_at: '2026-03-28T08:00:00Z',
-    raw_news: { title: 'Red Sea Logistics Disruption Continues', keyword: ['war', 'shipping', 'supply'], increased_items: ['fuel', 'oil'], decreased_items: [], published_at: '2026-03-28' },
-    causal_chains: [{ direction: 'up', category: 'dining', magnitude: 'medium', event: '홍해 운항 우회', result: '식료품 운임 상승', mechanism: '수에즈 운하 대신 아프리카 남단 우회로 물류비 증가' }],
-  },
-  {
-    id: '5', summary: 'OPEC+ 감산 연장 합의, 유가 상방 압력 강화',
-    reliability: 0.81, created_at: '2026-03-27T07:00:00Z',
-    raw_news: { title: 'OPEC+ Extends Production Cuts Agreement', keyword: ['oil', 'opec', 'fuel'], increased_items: ['fuel', 'oil'], decreased_items: [], published_at: '2026-03-27' },
-    causal_chains: [{ direction: 'up', category: 'fuel', magnitude: 'high', event: 'OPEC+ 감산 지속', result: '원유 가격 상승', mechanism: '주요 산유국들의 자발적 감산으로 글로벌 원유 공급 감소 예상' }],
-  },
-  {
-    id: '6', summary: '미 연준 금리 동결, 달러 약세로 원자재 가격 상승 가능성',
-    reliability: 0.65, created_at: '2026-03-26T06:00:00Z',
-    raw_news: { title: 'Fed Holds Rate Steady, Dollar Weakens', keyword: ['fed', 'dollar', 'commodity'], increased_items: [], decreased_items: [], published_at: '2026-03-26' },
-    causal_chains: [{ direction: 'neutral', category: 'neutral', magnitude: 'low', event: '연준 금리 동결', result: '달러 약세 가능성', mechanism: '금리 동결로 인한 달러 약세는 원자재 가격을 전반적으로 상승시킬 수 있음' }],
-  },
-  {
-    id: '7', summary: '이란 핵합의 협상 교착, 중동 지정학 불확실성 지속',
-    reliability: 0.78, created_at: '2026-03-25T10:00:00Z',
-    raw_news: { title: 'Iran Nuclear Talks Deadlocked', keyword: ['iran', 'war', 'oil'], increased_items: ['oil', 'fuel'], decreased_items: [], published_at: '2026-03-25' },
-    causal_chains: [{ direction: 'up', category: 'fuel', magnitude: 'medium', event: '중동 지정학 긴장', result: '원유 공급 불확실성', mechanism: '이란 핵합의 교착이 중동 원유 공급 리스크를 높이고 있음' }],
-  },
-  {
-    id: '8', summary: '인도 정부 밀 수출 제한 조치, 글로벌 식량 가격 상승 우려',
-    reliability: 0.60, created_at: '2026-03-24T14:00:00Z',
-    raw_news: { title: 'India Restricts Wheat Exports', keyword: ['food', 'wheat', 'export'], increased_items: [], decreased_items: [], published_at: '2026-03-24' },
-    causal_chains: [{ direction: 'up', category: 'dining', magnitude: 'low', event: '인도 밀 수출 제한', result: '국제 밀 가격 상승', mechanism: '세계 2위 밀 생산국 인도의 수출 제한으로 글로벌 공급 여건 악화' }],
-  },
-];
 
 const DIR_CHIPS = [
   { label: '전체',   value: '' },
@@ -267,18 +217,20 @@ function NewsDetailView({ item, onClose, topInset }) {
 // ── 목록 메인 ─────────────────────────────────────────────────
 export default function NewsListScreen() {
   const insets = useSafeAreaInsets();
-  const [newsList, setNewsList] = useState(MOCK_NEWS);
+  const [newsList, setNewsList] = useState([]);
   const [selected, setSelected] = useState(null);
   const [query, setQuery] = useState('');
   const [dirFilter, setDirFilter] = useState('');
   const [catFilter, setCatFilter] = useState('');
   const [sortAsc, setSortAsc] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetchNewsList()
       .then(data => { if (data?.length > 0) setNewsList(data); })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, []);
 
   // 안드로이드 하드웨어 뒤로가기 대응
@@ -331,7 +283,7 @@ export default function NewsListScreen() {
         <View style={[styles.headerTop, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}>
           <View>
             <Text style={styles.headerTitle}>뉴스</Text>
-            <Text style={styles.headerSub}>WAR PRICE RADAR</Text>
+            <Text style={styles.headerSub}>실시간 뉴스 분석</Text>
           </View>
           <TouchableOpacity onPress={() => setShowSearch(!showSearch)} style={{ padding: 5 }}>
             <Text style={{ fontSize: 18, color: COLORS.white }}>🔍</Text>
@@ -383,6 +335,7 @@ export default function NewsListScreen() {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.listContent}>
+        {loading && <ActivityIndicator color={COLORS.headerBg} style={{ marginBottom: 12, marginTop: 20 }} />}
         {filtered.map(item => (
           <NewsCard key={item.id} item={item} onPress={setSelected} />
         ))}
