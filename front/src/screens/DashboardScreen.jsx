@@ -17,81 +17,6 @@ import { COLORS } from '../constants/colors';
 import { formatNumber } from '../lib/helpers';
 import { fetchCausalChains, fetchIndicatorLatest, fetchNewsList } from '../lib/supabase';
 
-// ── Mock 데이터 ────────────────────────────────────────────────
-const MOCK_INDICATORS = [
-  { ai_gpr_index: 250.6, oil_disruptions: 1717, gpr_original: 154.7, non_oil_gpr: 112.3, reference_date: '2026-03-31' },
-  { ai_gpr_index: 232.2, oil_disruptions: 1370, gpr_original: 197.1, non_oil_gpr: 154.7, reference_date: '2026-03-30' },
-];
-
-const MOCK_CHAINS = [
-  { category: 'travel',  direction: 'up',      magnitude: 'high',   change_pct_min: 22,  change_pct_max: 28,  news_count: 3 },
-  { category: 'fuel',    direction: 'down',     magnitude: 'medium', change_pct_min: -5,  change_pct_max: -2,  news_count: 2 },
-  { category: 'utility', direction: 'down',     magnitude: 'low',    change_pct_min: -5,  change_pct_max: -5,  news_count: 1 },
-  { category: 'dining',  direction: 'neutral',  magnitude: 'low',    change_pct_min: 0,   change_pct_max: 0,   news_count: 1 },
-];
-
-const MOCK_NEWS = [
-  {
-    id: '1',
-    summary: '항공사 수하물 요금 인상 예고, 여름 성수기 앞두고 여행 비용 증가',
-    reliability: 0.92,
-    raw_news: {
-      title: 'Airlines Raise Baggage Fees Ahead of Summer',
-      keyword: ['airline', 'travel', 'fee'],
-      increased_items: ['fuel', 'oil'],
-      decreased_items: [],
-    },
-    causal_chains: [{ direction: 'up', category: 'travel' }],
-  },
-  {
-    id: '2',
-    summary: '러시아 석유 제재 완화 논의, 국제유가 하락 압력',
-    reliability: 0.72,
-    raw_news: {
-      title: 'Russia Oil Sanctions Easing Talks',
-      keyword: ['oil', 'sanction', 'war'],
-      increased_items: [],
-      decreased_items: ['fuel'],
-    },
-    causal_chains: [{ direction: 'down', category: 'fuel' }],
-  },
-  {
-    id: '3',
-    summary: '유럽 천연가스 공급 정상화로 전기요금 안정세 전망',
-    reliability: 0.55,
-    raw_news: {
-      title: 'European Gas Supply Normalizes',
-      keyword: ['gas', 'utility', 'europe'],
-      increased_items: [],
-      decreased_items: ['utility'],
-    },
-    causal_chains: [{ direction: 'down', category: 'utility' }],
-  },
-  {
-    id: '4',
-    summary: '홍해 물류 차질 지속, 소비재 전반 가격 상승 압박',
-    reliability: 0.88,
-    raw_news: {
-      title: 'Red Sea Logistics Disruption Continues',
-      keyword: ['war', 'shipping', 'supply'],
-      increased_items: ['fuel'],
-      decreased_items: [],
-    },
-    causal_chains: [{ direction: 'up', category: 'dining' }],
-  },
-  {
-    id: '5',
-    summary: 'OPEC+ 감산 연장 합의, 유가 상방 압력 강화',
-    reliability: 0.81,
-    raw_news: {
-      title: 'OPEC+ Extends Production Cuts',
-      keyword: ['oil', 'opec', 'fuel'],
-      increased_items: ['fuel', 'oil'],
-      decreased_items: [],
-    },
-    causal_chains: [{ direction: 'up', category: 'fuel' }],
-  },
-];
 
 // ── 리스크 카드 ────────────────────────────────────────────────
 function RiskCard({ label, value, change }) {
@@ -190,10 +115,10 @@ function NewsRow({ item, isLast }) {
 // ── 화면 본체 ─────────────────────────────────────────────────
 export default function DashboardScreen() {
   const insets = useSafeAreaInsets();
-  const [indicators, setIndicators] = useState(MOCK_INDICATORS);
-  const [chains, setChains] = useState(MOCK_CHAINS);
-  const [news, setNews] = useState(MOCK_NEWS);
-  const [loading, setLoading] = useState(false);
+  const [indicators, setIndicators] = useState([]);
+  const [chains, setChains] = useState([]);
+  const [news, setNews] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     (async () => {
