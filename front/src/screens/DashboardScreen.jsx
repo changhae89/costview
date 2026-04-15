@@ -15,27 +15,29 @@ import ReliabilityBadge from '../components/ReliabilityBadge';
 import { CATEGORY_MAP, DIRECTION_MAP, MAGNITUDE_MAP } from '../constants/category';
 import { COLORS } from '../constants/colors';
 import { formatNumber } from '../lib/helpers';
-import { fetchCausalChains, fetchIndicatorLatest, fetchNewsList } from '../lib/supabase';
+import { fetchCausalChains, fetchDashboardMetrics, fetchNewsList } from '../lib/supabase';
 
 
 // ── 리스크 카드 ────────────────────────────────────────────────
-function RiskCard({ label, value, change }) {
+function RiskCard({ label, desc, value, change, date }) {
   const changeNum = Number(change);
   const changeColor = changeNum > 0 ? '#FF8A7A' : '#6EE7B7';
   const changeText = changeNum > 0
     ? `▲+${changeNum.toFixed(1)}`
     : changeNum < 0
-      ? `▼${changeNum.toFixed(1)}`
+      ? `▼${Math.abs(changeNum).toFixed(1)}`
       : '─ 0.0';
 
   return (
     <View style={styles.riskCard}>
       <Text style={styles.riskLabel}>{label}</Text>
-      <Text style={styles.riskValue} numberOfLines={1}>{formatNumber(value)}</Text>
+      {desc && <Text style={{fontSize: 8, color: 'rgba(255,255,255,0.4)', marginBottom: 4}}>{desc}</Text>}
+      <Text style={styles.riskValue} numberOfLines={1}>{value !== null && value !== undefined && value !== '' ? formatNumber(value) : '-'}</Text>
       <View style={styles.riskBar}>
         <View style={styles.riskBarFill} />
       </View>
       <Text style={[styles.riskChange, { color: changeColor }]}>{changeText}</Text>
+      {date ? <Text style={styles.riskDate}>{date}</Text> : null}
     </View>
   );
 }
@@ -112,10 +114,9 @@ function NewsRow({ item, isLast }) {
   );
 }
 
-// ── 화면 본체 ─────────────────────────────────────────────────
 export default function DashboardScreen() {
   const insets = useSafeAreaInsets();
-  const [indicators, setIndicators] = useState([]);
+  const [metrics, setMetrics] = useState(null);
   const [chains, setChains] = useState([]);
   const [news, setNews] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -124,12 +125,12 @@ export default function DashboardScreen() {
     (async () => {
       try {
         setLoading(true);
-        const [ind, ch, nw] = await Promise.all([
-          fetchIndicatorLatest(),
+        const [dash, ch, nw] = await Promise.all([
+          fetchDashboardMetrics(),
           fetchCausalChains(),
           fetchNewsList(),
         ]);
-        if (ind?.length >= 2) setIndicators(ind);
+        if (dash) setMetrics(dash);
         if (ch?.length > 0) {
           const grouped = {};
           ch.forEach(c => {
@@ -142,16 +143,21 @@ export default function DashboardScreen() {
           setChains(Object.values(grouped));
         }
         if (nw?.length > 0) setNews(nw.slice(0, 5));
-      } catch (_) { /* Supabase 미연결 시 mock 유지 */ }
+      } catch { /* Supabase 미연결 시 mock 유지 */ }
       finally { setLoading(false); }
     })();
   }, []);
 
-  const latest = indicators[0] ?? {};
-  const prev   = indicators[1] ?? {};
-  const aiChange   = ((latest.ai_gpr_index ?? 0)   - (prev.ai_gpr_index ?? 0));
-  const oilChange  = ((latest.oil_disruptions ?? 0) - (prev.oil_disruptions ?? 0));
-  const nonOilChange = ((latest.non_oil_gpr ?? 0)  - (prev.non_oil_gpr ?? 0));
+  const latest = metrics?.latest ?? {};
+  const prev   = metrics?.prev ?? {};
+
+  const CARDS = [
+    { key: 'ai_gpr', label: 'AI 지수', desc: '지정학 위험 지수', val: latest.ai_gpr_index, pval: prev.ai_gpr_index, date: latest.dates?.ai_gpr_index ?? latest.reference_date },
+    { key: 'krw_usd', label: '원/달러 환율', desc: '거시 경제 환율', val: latest.krw_usd_rate, pval: prev.krw_usd_rate, date: latest.dates?.krw_usd_rate ?? latest.reference_date },
+    { key: 'wti', label: 'WTI 원유', desc: '국제 원유가 (달러)', val: latest.fred_wti, pval: prev.fred_wti, date: latest.dates?.fred_wti ?? latest.reference_date },
+    { key: 'cpi', label: '한국 소비자물가', desc: '전년동월대비 (%)', val: latest.cpi_total, pval: prev.cpi_total, date: latest.dates?.cpi_total ?? latest.reference_date },
+    { key: 'fed', label: '미 10년 국채', desc: '미국 10년물 금리 (%)', val: latest.fred_treasury_10y, pval: prev.fred_treasury_10y, date: latest.dates?.fred_treasury_10y ?? latest.reference_date },
+  ];
 
   return (
     <View style={styles.root}>
@@ -164,18 +170,22 @@ export default function DashboardScreen() {
             <Text style={styles.headerTitle}>대시보드</Text>
             <Text style={styles.headerSub}>실시간 종합 현황</Text>
           </View>
-          {latest.reference_date ? (
-            <View style={styles.dateBadge}>
-              <Text style={styles.dateBadgeText}>기준일 {latest.reference_date}</Text>
-            </View>
-          ) : null}
         </View>
 
-        {/* 리스크 카드 3개 */}
-        <View style={styles.riskRow}>
-          <RiskCard label="AI 지정학적 위험 지수"   value={latest.ai_gpr_index}    change={aiChange} />
-          <RiskCard label="석유차질"  value={latest.oil_disruptions}  change={oilChange} />
-          <RiskCard label="비석유"   value={latest.non_oil_gpr}      change={nonOilChange} />
+        {/* 리스크 카드 가로 스크롤 */}
+        <View style={{ marginHorizontal: -16 }}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.riskRow}>
+            {CARDS.map(c => (
+              <RiskCard 
+                key={c.key} 
+                label={c.label} 
+                desc={c.desc} 
+                value={c.val} 
+                change={(c.val ?? 0) - (c.pval ?? 0)} 
+                date={c.date}
+              />
+            ))}
+          </ScrollView>
         </View>
       </View>
 
@@ -231,24 +241,17 @@ const styles = StyleSheet.create({
   },
   headerTitle: { fontSize: 17, fontWeight: '700', color: COLORS.headerText },
   headerSub:   { fontSize: 10, color: COLORS.headerAccent, marginTop: 2 },
-  dateBadge: {
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    borderRadius: 10,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-  },
-  dateBadgeText: { fontSize: 10, color: COLORS.headerText },
 
   // Risk cards
-  riskRow:   { flexDirection: 'row', gap: 8 },
+  riskRow:   { flexDirection: 'row', gap: 8, paddingHorizontal: 16 },
   riskCard: {
-    flex: 1,
+    width: 120, // 가로 스크롤 시 카드의 고정 너비
     backgroundColor: 'rgba(255,255,255,0.10)',
     borderRadius: 12,
-    paddingVertical: 9,
-    paddingHorizontal: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
   },
-  riskLabel:   { fontSize: 9, color: 'rgba(255,255,255,0.6)', marginBottom: 4 },
+  riskLabel:   { fontSize: 10, fontWeight: '700', color: 'rgba(255,255,255,0.9)', marginBottom: 2 },
   riskValue:   { fontSize: 18, fontWeight: '700', color: COLORS.headerText },
   riskBar: {
     height: 3,
@@ -258,6 +261,7 @@ const styles = StyleSheet.create({
   },
   riskBarFill: { width: '60%', height: 3, backgroundColor: 'rgba(255,255,255,0.4)', borderRadius: 2 },
   riskChange:  { fontSize: 10 },
+  riskDate: { position: 'absolute', right: 10, bottom: 8, fontSize: 9, color: 'rgba(255,255,255,0.55)' },
 
   // Body
   body:        { flex: 1 },

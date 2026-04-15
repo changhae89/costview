@@ -1,5 +1,5 @@
 // screens/NewsListScreen.jsx — SCR-002 뉴스 목록 & 상세
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Animated,
   BackHandler,
@@ -48,10 +48,23 @@ function Chip({ label, active, onPress }) {
   );
 }
 
-// ── 뉴스 카드 ─────────────────────────────────────────────────
+function getNewsDateFromRawNews(rawNews, createdAt) {
+  const published = rawNews?.origin_published_at ?? rawNews?.published_date ?? '';
+  if (published) return published.slice(0, 10);
+
+  const rawId = rawNews?.id;
+  if (rawId !== null && rawId !== undefined) {
+    const idStr = String(rawId).trim();
+    const match = idStr.match(/^(\d{4})[-_]?(\d{2})[-_]?(\d{2})/);
+    if (match) return `${match[1]}-${match[2]}-${match[3]}`;
+  }
+
+  return createdAt?.slice(0, 10) ?? '';
+}
+
 function NewsCard({ item, onPress }) {
   const mainChain = item.causal_chains?.[0];
-  const dateStr = item.raw_news?.published_at ?? item.created_at?.slice(0, 10) ?? '';
+  const dateStr = getNewsDateFromRawNews(item.raw_news, item.created_at);
 
   return (
     <Pressable onPress={() => onPress(item)} style={styles.newsCard}>
@@ -82,7 +95,7 @@ function NewsCard({ item, onPress }) {
 
 // ── 뉴스 상세 (슬라이드 전환) ─────────────────────────────────
 function NewsDetailView({ item, onClose, topInset }) {
-  const slideAnim = useRef(new Animated.Value(SCREEN_W)).current;
+  const [slideAnim] = useState(() => new Animated.Value(SCREEN_W));
 
   useEffect(() => {
     Animated.timing(slideAnim, {
@@ -91,7 +104,7 @@ function NewsDetailView({ item, onClose, topInset }) {
       easing: Easing.bezier(0.4, 0, 0.2, 1),
       useNativeDriver: true,
     }).start();
-  }, []);
+  }, [slideAnim]);
 
   const handleClose = () => {
     Animated.timing(slideAnim, {
@@ -105,7 +118,7 @@ function NewsDetailView({ item, onClose, topInset }) {
   const mainChain  = item.causal_chains?.[0];
   const dir        = mainChain ? (DIRECTION_MAP[mainChain.direction] ?? DIRECTION_MAP.neutral) : DIRECTION_MAP.neutral;
   const catName    = mainChain ? (CATEGORY_MAP[mainChain.category] ?? mainChain.category) : '';
-  const dateStr    = item.raw_news?.published_at ?? item.created_at?.slice(0, 10) ?? '';
+  const dateStr    = getNewsDateFromRawNews(item.raw_news, item.created_at);
   const reliabilityPct = Math.round((item.reliability ?? 0) * 100);
 
   return (
@@ -259,8 +272,8 @@ export default function NewsListScreen() {
     }
     return true;
   }).sort((a, b) => {
-    const da = new Date(a.created_at ?? 0);
-    const db = new Date(b.created_at ?? 0);
+    const da = new Date(getNewsDateFromRawNews(a.raw_news, a.created_at) ?? 0);
+    const db = new Date(getNewsDateFromRawNews(b.raw_news, b.created_at) ?? 0);
     return sortAsc ? da - db : db - da;
   });
 
